@@ -33,23 +33,24 @@ main = do
   (maybeN, maybeChar) <- runReaderT tryReadNextUInt maybeGetCharFromStdin
   case maybeN of
     Just n -> do
-      runPrependedT (repeat n) (return maybeChar, maybeGetCharFromStdin)
-      return ()
+      repeat n $ Left (return maybeChar, maybeGetCharFromStdin)
     _ -> do
       hPutStrLn stderr "No N"
       exitWith (ExitFailure 1)
   where
-    repeat n
+    repeat n p
       | n <= 0 = return ()
       | otherwise = do
-          (ioBool, newMaybeChar) <- processLine
+          ((ioBool, newMaybeChar), p') <- continuePrependedT processLine p
           processed <- liftIO ioBool
           if processed then
-            repeat (n - 1)
+            let newP = case p' of
+                  Left{} -> p' -- impossible
+                  Right s -> Left (return newMaybeChar, s)
+            in repeat (n - 1) newP
           else do
-            liftIO $ do
-              hPutStrLn stderr "Bad line"
-              exitWith (ExitFailure 2)
+            hPutStrLn stderr "Bad line"
+            exitWith (ExitFailure 2)
 
 --
 skipAllNonDigits :: MCharReader (Maybe Char)
